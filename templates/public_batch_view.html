@@ -1,43 +1,106 @@
 {% extends 'layout.html' %}
 {% block content %}
 <style>
-    .public-card {
-        background: linear-gradient(145deg, #1A0F3A, #22223b);
-        color: var(--text-color);
-        padding: 50px;
-        border-radius: 25px;
-        box-shadow: 0 15px 45px rgba(0, 0, 0, 0.4);
-        margin-top: 50px;
-    }
-    .public-card h2 {
-        color: var(--highlight-color);
-        font-weight: 700;
-        font-size: 2.5rem;
-        margin-bottom: 20px;
-    }
-    .public-card p {
-        font-size: 1.1rem;
-        line-height: 1.6;
-        color: var(--secondary-text-clear);
-    }
+.hero-section {
+    background: linear-gradient(135deg, #1e3c72, #2a5298);
+    color: white;
+    border-radius: 12px;
+    padding: 3rem;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+.hero-section h1 {
+    font-size: 2.5rem;
+    font-weight: 700;
+}
+.course-desc {
+    background: #22223b;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+    color: #eaeaea;
+}
+.trainer-card {
+    background: #2b2b44;
+    padding: 1.5rem;
+    border-radius: 12px;
+    text-align: center;
+}
+.trainer-card img {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    border: 3px solid #00ffff;
+    object-fit: cover;
+    margin-bottom: 10px;
+}
+.curriculum {
+    background: #2b2b44;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+.enroll-btn {
+    background-color: #ff6600;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-weight: 600;
+    transition: background 0.3s;
+}
+.enroll-btn:hover {
+    background-color: #ff8533;
+}
 </style>
 
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="card public-card text-center">
-            <h5 class="card-title text-uppercase mb-3" style="color: var(--accent-color);">Course Information</h5>
-            <h2>{{ batch.name }}</h2>
-            <hr style="border-color: rgba(255, 255, 255, 0.1);">
-            <p>{{ batch.description or 'A detailed description of the course content will be provided soon.' }}</p>
+<div class="hero-section">
+    <h1>{{ batch.name }}</h1>
+    <p class="lead">{{ batch.description or "Learn and grow with this course." }}</p>
+    <a href="{{ url_for('register') }}" class="enroll-btn">Enroll Now</a>
+</div>
 
-            <div class="mt-4">
-                <p>To access video content and enroll in this program, please:</p>
-                <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg me-3">Login to Access</a>
-                <a href="{{ url_for('register') }}" class="btn btn-success btn-lg">Create Account</a>
-            </div>
+<div class="row g-4">
+    <div class="col-md-8">
+        <div class="course-desc">
+            <h4>About this Course</h4>
+            <p>{{ batch.description or "This course will help you understand the core concepts step-by-step." }}</p>
+            <hr>
+            <h5>What You’ll Learn</h5>
+            <ul>
+                <li>Understand key concepts from basics to advanced.</li>
+                <li>Hands-on learning with practical examples.</li>
+                <li>Access to recorded lectures and resources.</li>
+                <li>Get guidance from expert trainers.</li>
+            </ul>
         </div>
-        <div class="text-center mt-3">
-            <a href="{{ url_for('index') }}" class="small-muted"><i class="fas fa-arrow-left"></i> Back to All Courses</a>
+
+        <div class="curriculum">
+            <h4>Course Curriculum Preview</h4>
+            <ul class="list-group mt-3">
+                {% for r in batch.recordings[:3] %}
+                <li class="list-group-item bg-dark text-light border-secondary">
+                    <i class="fas fa-play-circle text-info me-2"></i> {{ r.original_name }}
+                </li>
+                {% else %}
+                <li class="list-group-item bg-dark text-muted">No content uploaded yet.</li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="trainer-card">
+            {% if batch.trainer %}
+                {% if batch.trainer.profile_pic %}
+                    <img src="{{ url_for('static', filename='profiles/' + batch.trainer.profile_pic) }}" alt="Trainer">
+                {% else %}
+                    <i class="fas fa-user-circle fa-4x text-secondary"></i>
+                {% endif %}
+                <h5 class="mt-2">{{ batch.trainer.name }}</h5>
+                <p>{{ batch.trainer.expertise or "Course Instructor" }}</p>
+            {% else %}
+                <p class="text-muted">Trainer not assigned yet.</p>
+            {% endif %}
         </div>
     </div>
 </div>

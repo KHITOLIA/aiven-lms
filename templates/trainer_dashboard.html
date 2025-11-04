@@ -14,7 +14,6 @@
         font-size: 2.5rem;
         margin-bottom: 0.5rem;
     }
-    
     .profile-card {
         background: #22223b;
         border-radius: 15px;
@@ -40,18 +39,40 @@
     }
     .query-item {
         border-left: 5px solid #FF4500;
-        margin-bottom: 10px;
+        margin-bottom: 15px;
         border-radius: 5px;
         background-color: rgba(255, 69, 0, 0.08) !important;
         color: var(--primary-text-bright);
+        transition: all 0.4s ease;
     }
-    /* FIX 1: Spacing between buttons in the list */
     .batch-actions {
         display: flex;
-        gap: 10px; /* Added spacing */
-        min-width: 250px; 
+        gap: 10px;
+        min-width: 250px;
+    }
+    .query-status-btns {
+        display: flex;
+        gap: 6px;
+        margin-top: 5px;
+    }
+    .reply-box {
+        margin-top: 10px;
+    }
+    textarea.reply-textarea {
+        width: 100%;
+        border-radius: 8px;
+        border: 1px solid #444;
+        background-color: #2a2a40;
+        color: #fff;
+        padding: 8px;
+        resize: none;
+    }
+    .in-progress {
+    border-left-color: #FFD700 !important;
+    background-color: rgba(255, 215, 0, 0.08) !important;
     }
 </style>
+
 <h3 class="mb-5">Trainer Dashboard</h3>
 
 <div class="row g-4 mb-5">
@@ -67,14 +88,14 @@
             <a href="{{ url_for('trainer_profile') }}" class="btn btn-sm btn-outline-info mt-2">Edit Profile</a>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="stats-card">
             <h4>{{ batches|length }}</h4>
             <p>Assigned Batches</p>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="stats-card">
             <h4>{{ total_recordings_assigned }}</h4>
@@ -84,26 +105,20 @@
 </div>
 
 <div class="row mt-4">
+    <!-- ✅ Live Queries Panel -->
     <div class="col-md-6">
         <div class="card p-4 shadow-sm h-100">
-            <h5 class="card-title text-warning"><i class="fas fa-envelope-open-text"></i> Open Student Queries ({{ trainer_queries|length }})</h5>
-            <div class="list-group list-group-flush mt-3">
-                {% for query in trainer_queries %}
-                <div class="list-group-item query-item p-3">
-                    <p class="mb-1"><strong>From:</strong> {{ query.user.name }} ({{ query.batch.name if query.batch else 'General' }})</p>
-                    <p class="small-muted mb-0">{{ query.message }}</p>
-                    <small class="text-white-50 float-end">{{ query.created_at.strftime('%b %d, %I:%M %p') }}</small>
-                </div>
-                {% else %}
-                <li class="list-group-item text-center text-muted">No open queries for your assigned batches.</li>
-                {% endfor %}
-            </div>
+            <h5 class="card-title text-warning">
+                <i class="fas fa-envelope-open-text"></i> Student Queries
+            </h5>
+            <div id="trainer-queries" class="list-group list-group-flush mt-3">Loading...</div>
         </div>
     </div>
 
+    <!-- ✅ Batch Management Panel -->
     <div class="col-md-6">
         <div class="card p-4 shadow-sm h-100">
-            <h5 class="card-title">My Assigned Batches (Action Required)</h5>
+            <h5 class="card-title">My Assigned Batches</h5>
             <div class="list-group list-group-flush mt-3">
                 {% for b in batches %}
                 <div class="list-group-item d-flex justify-content-between align-items-center">
@@ -112,7 +127,7 @@
                         <small class="small-muted">{{ b.description or 'No description provided.' }}</small>
                     </div>
                     <div class="batch-actions">
-                         <a href="{{ url_for('view_batch', batch_id=b.id) }}" class="btn btn-sm btn-success">
+                        <a href="{{ url_for('view_batch', batch_id=b.id) }}" class="btn btn-sm btn-success">
                             <i class="fas fa-upload"></i> Manage Content
                         </a>
                         <a href="{{ url_for('view_batch_enrollments', batch_id=b.id) }}" class="btn btn-sm btn-outline-info">
@@ -127,4 +142,107 @@
         </div>
     </div>
 </div>
+
+<!-- ✅ Script -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  async function loadTrainerQueries() {
+    const container = document.getElementById('trainer-queries');
+    try {
+      const res = await fetch('/trainer/queries/json');
+      const qs = await res.json();
+      if (!Array.isArray(qs) || qs.length === 0) {
+        container.innerHTML = '<div class="text-muted text-center">No open queries 🎉</div>';
+        return;
+      }
+      let html = '';
+      qs.forEach(q => {
+        if (q.status === 'Resolved') return;
+        const activeClass = q.status === 'In Progress' ? 'in-progress' : '';
+        html += `
+          <div class="list-group-item query-item ${activeClass}" id="query-${q.id}">
+            <p class="mb-1"><strong>${q.student_name}</strong> (${q.batch_name || 'General'})</p>
+            <p class="small-muted mb-0">${q.message}</p>
+            <small class="text-white-50">${new Date(q.created_at).toLocaleString()}</small>
+            <div><span class="text-info fw-bold">${q.status}</span></div>
+
+            <div class="reply-box">
+              <label class="small text-white-50">Your Reply:</label>
+              <textarea id="reply-${q.id}" class="reply-textarea" rows="2" placeholder="Write your reply here...">${q.reply || ''}</textarea>
+              <div class="query-status-btns">
+                <button class="btn btn-sm btn-outline-success" onclick="sendReply(${q.id})">
+                  <i class="fas fa-paper-plane"></i> Send Reply
+                </button>
+                <button class="btn btn-sm btn-outline-warning" onclick="updateStatus(${q.id}, 'In Progress')">
+                  <i class="fas fa-hourglass-half"></i> In Progress
+                </button>
+                <button class="btn btn-sm btn-outline-success" onclick="updateStatus(${q.id}, 'Resolved')">
+                  <i class="fas fa-check"></i> Resolve
+                </button>
+              </div>
+            </div>
+          </div>`;
+      });
+      container.innerHTML = html || '<div class="text-muted text-center">No open queries 🎉</div>';
+    } catch (err) {
+      console.error(err);
+      container.innerHTML = '<div class="text-danger">Failed to load queries.</div>';
+    }
+  }
+
+  window.updateStatus = async (id, status) => {
+    try {
+      const res = await fetch(`/trainer/update_query_status/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({status})
+      });
+
+      if (res.ok) {
+        const card = document.getElementById(`query-${id}`);
+        if (!card) return;
+
+        if (status === 'Resolved') {
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(40px)';
+          setTimeout(() => card.remove(), 400);
+        } else if (status === 'In Progress') {
+          card.classList.add('in-progress');
+          const statusLabel = card.querySelector('.fw-bold');
+          if (statusLabel) statusLabel.textContent = 'In Progress';
+        }
+      } else alert('Failed to update query status.');
+    } catch (err) {
+      console.error(err);
+      alert('Error updating status.');
+    }
+  };
+
+  window.sendReply = async (id) => {
+    const reply = document.getElementById(`reply-${id}`).value.trim();
+    if (!reply) return alert('Please write a reply before sending.');
+    try {
+      const res = await fetch(`/trainer/reply_query/${id}`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({reply})
+      });
+      if (res.ok) {
+        const card = document.getElementById(`query-${id}`);
+        if (card) {
+          card.style.opacity = '0';
+          card.style.transform = 'translateX(40px)';
+          setTimeout(() => card.remove(), 400);
+        }
+      } else alert('Failed to send reply.');
+    } catch (err) {
+      console.error(err);
+      alert('Error sending reply.');
+    }
+  };
+
+  loadTrainerQueries();
+});
+</script>
+
 {% endblock %}

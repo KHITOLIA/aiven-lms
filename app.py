@@ -9,7 +9,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message 
 from dotenv import load_dotenv 
 import mimetypes
-
+from flask import jsonify, request
+import ollama  # or openai, depending on what you’re using
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -31,6 +32,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('LMS_SECRET_KEY', 'dev-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
 
+# ----------------- DATABASE CONFIG (Aiven PostgreSQL) -----------------
+DB_USER = "avnadmin"
+DB_PASSWORD = "AVNS_DCgm-4auSh0kErY1GdT"
+DB_HOST = "pg-32cb6f92-chitkarauniversity390-8745.f.aivencloud.com"
+DB_PORT = "16785"
+DB_NAME = "defaultdb"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -92,6 +99,13 @@ class Batch(db.Model):
     description = db.Column(db.Text, nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     trainer_id = db.Column(db.Integer, db.ForeignKey('trainer.id'), nullable=True)
+
+    # ✅ New fields for richer course data
+    category = db.Column(db.String(100), nullable=True)         # e.g., "Data Science", "Web Dev"
+    duration = db.Column(db.String(50), nullable=True)          # e.g., "10 hours", "6 weeks"
+    thumbnail = db.Column(db.String(200), nullable=True)        # path to image file
+    what_you_learn = db.Column(db.Text, nullable=True)          # comma-separated or paragraph list
+
     recordings = db.relationship('Recording', backref='batch', cascade='all, delete-orphan')
     enrollments = db.relationship('Enrollment', backref='batch', cascade='all, delete-orphan')
 
@@ -121,11 +135,15 @@ class Query(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     batch_id = db.Column(db.Integer, db.ForeignKey('batch.id'), nullable=True)
     message = db.Column(db.Text, nullable=False)
+    reply = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), default='Open') # Open, In Progress, Closed
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     user = db.relationship('User', backref='queries', lazy=True)
     batch = db.relationship('Batch', backref='queries', lazy=True)
+    
+
+
 
 class OTP_Token(db.Model): # OTP MODEL RETAINED FOR PASSWORD RESET
     id = db.Column(db.Integer, primary_key=True)
@@ -364,11 +382,29 @@ def dashboard():
             return redirect(url_for('logout'))
             
         batches = Batch.query.filter_by(trainer_id=trainer.id).all()
-        
-        # Trainer Dashboard: No progress calculations needed anymore
-        return render_template('trainer_dashboard.html', 
-                               trainer=trainer, 
-                               batches=batches) 
+
+        # 🧩 Get open queries only for trainer’s batches
+        batch_ids = [b.id for b in batches]
+        trainer_queries = (
+            Query.query.filter(Query.batch_id.in_(batch_ids), Query.status != 'Resolved')
+            .order_by(Query.created_at.desc())
+            .all()
+        )
+
+        total_recordings_assigned = (
+            db.session.query(Recording)
+            .join(Batch, Recording.batch_id == Batch.id)
+            .filter(Batch.trainer_id == trainer.id)
+            .count()
+        )
+
+        return render_template(
+            'trainer_dashboard.html',
+            trainer=trainer,
+            batches=batches,
+            total_recordings_assigned=total_recordings_assigned,
+            trainer_queries=trainer_queries
+        )
         
     else: # Student
         enrollments = Enrollment.query.filter_by(user_id=user.id).all()
@@ -407,20 +443,40 @@ def view_all_trainers():
     trainers = Trainer.query.all()
     return render_template('view_all_trainers.html', trainers=trainers)
 
+
 @app.route('/create_batch', methods=['POST'])
 def create_batch():
     if not inject_helpers()['is_admin']():
         abort(403)
+
     name = request.form['name']
     desc = request.form.get('description')
+    category = request.form.get('category')
+    duration = request.form.get('duration')
+    what_you_learn = request.form.get('what_you_learn')
+
+    thumbnail = None
+    file = request.files.get('thumbnail')
+    if file and file.filename:
+        filename = secure_filename(file.filename)
+        thumb_path = os.path.join('static', 'thumbnails')
+        os.makedirs(thumb_path, exist_ok=True)
+        file.save(os.path.join(thumb_path, filename))
+        thumbnail = filename
+
     if Batch.query.filter_by(name=name).first():
-        flash('Batch with this name already exists','danger')
+        flash('Batch with this name already exists', 'danger')
     else:
-        b = Batch(name=name, description=desc)
+        b = Batch(
+            name=name, description=desc, category=category, duration=duration,
+            thumbnail=thumbnail, what_you_learn=what_you_learn
+        )
         db.session.add(b)
         db.session.commit()
-        flash('Batch created successfully','success')
+        flash('Course created successfully', 'success')
+
     return redirect(url_for('admin_dashboard'))
+
 
 @app.route('/delete_batch/<int:batch_id>')
 def delete_batch(batch_id):
@@ -996,6 +1052,245 @@ def youtube_search():
     
     return render_template('youtube_viewer.html', search_url=search_url, query=query)
 
+from flask import jsonify
+
+# 🧩 Student adds a query
+@app.route('/add_query', methods=['POST'])
+def add_query():
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'student':
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    data = request.get_json()
+    batch_id = data.get('batch_id')
+    message = data.get('message', '').strip()
+
+    if not batch_id or not message:
+        return jsonify({'message': 'Batch and message are required'}), 400
+
+    # Check enrollment
+    enrollment = Enrollment.query.filter_by(user_id=user.id, batch_id=batch_id).first()
+    if not enrollment:
+        return jsonify({'message': 'You are not enrolled in this course.'}), 403
+
+    q = Query(user_id=user.id, batch_id=batch_id, message=message, status='Open')
+    db.session.add(q)
+    db.session.commit()
+
+    return jsonify({'message': 'Query added successfully!'}), 200
+
+
+# 🧩 Student: Get their own queries
+@app.route('/student/queries/json')
+def student_queries_json():
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'student':
+        return jsonify([])
+
+    queries = (
+        Query.query.filter_by(user_id=user.id)
+        .order_by(Query.created_at.desc())
+        .all()
+    )
+
+    data = [
+        {
+            'id': q.id,
+            'batch_name': q.batch.name if q.batch else None,
+            'message': q.message,
+            'reply': q.reply if hasattr(q, 'reply') else None,
+            'status': q.status,
+            'created_at': q.created_at.isoformat()
+        }
+        for q in queries
+    ]
+    return jsonify(data)
+
+
+@app.route('/student/add_query', methods=['POST'])
+def student_add_query():
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'student':
+        return {"status": "error", "message": "Unauthorized"}, 403
+
+    data = request.get_json()
+    batch_id = data.get("batch_id")
+    message = data.get("message", "").strip()
+
+    if not message:
+        return {"status": "error", "message": "Empty message"}, 400
+
+    try:
+        q = Query(user_id=user.id, batch_id=batch_id, message=message)
+        db.session.add(q)
+        db.session.commit()
+        return {"status": "success", "message": "Query added successfully"}, 200
+    except Exception as e:
+        db.session.rollback()
+        print("Error adding query:", e)
+        return {"status": "error", "message": "Database error"}, 500
+
+
+
+# 🧩 Trainer: Get queries for their assigned batches
+@app.route('/trainer/queries/json')
+def trainer_queries_json():
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'trainer':
+        return jsonify([])
+
+    trainer = Trainer.query.filter_by(email=user.email).first()
+    if not trainer:
+        return jsonify([])
+
+    batch_ids = [b.id for b in trainer.batches]
+    if not batch_ids:
+        return jsonify([])
+
+    queries = (
+        Query.query.filter(Query.batch_id.in_(batch_ids))
+        .order_by(Query.created_at.desc())
+        .all()
+    )
+
+    data = [
+        {
+            'id': q.id,
+            'student_name': q.user.name if q.user else 'Unknown',
+            'batch_name': q.batch.name if q.batch else None,
+            'message': q.message,
+            'status': q.status,
+            'created_at': q.created_at.isoformat()
+        }
+        for q in queries
+    ]
+    return jsonify(data)
+
+# === TRAINER REPLY SUBMIT ===
+@app.route('/trainer/update_query_reply/<int:query_id>', methods=['POST'])
+def trainer_update_query_reply(query_id):
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'trainer':
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
+    query = Query.query.get_or_404(query_id)
+    trainer = Trainer.query.filter_by(email=user.email).first()
+    if not trainer or (query.batch and query.batch.trainer_id != trainer.id):
+        return jsonify({'status': 'error', 'message': 'Not your batch'}), 403
+
+    data = request.get_json()
+    reply_text = data.get('reply', '').strip()
+
+    if not reply_text:
+        return jsonify({'status': 'error', 'message': 'Empty reply'}), 400
+
+    # ✅ Update and commit
+    query.reply = reply_text
+    query.status = 'Resolved'
+    db.session.commit()
+
+    return jsonify({'status': 'success', 'message': 'Query resolved', 'query_id': query.id})
+
+
+
+
+
+# 🧩 Trainer updates query status (In Progress / Resolved)
+@app.route('/trainer/update_query_status/<int:query_id>', methods=['POST'])
+def update_query_status(query_id):
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'trainer':
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    trainer = Trainer.query.filter_by(email=user.email).first()
+    q = Query.query.get_or_404(query_id)
+
+    # Security: trainer can only update queries from their batches
+    if q.batch_id not in [b.id for b in trainer.batches]:
+        return jsonify({'message': 'Forbidden'}), 403
+
+    new_status = request.json.get('status')
+    if new_status not in ['Open', 'In Progress', 'Resolved']:
+        return jsonify({'message': 'Invalid status'}), 400
+
+    q.status = new_status
+    db.session.commit()
+    return jsonify({'message': f'Status updated to {new_status}'}), 200
+
+# 🧩 Trainer adds or updates a reply to a query
+@app.route('/trainer/reply_query/<int:query_id>', methods=['POST'])
+def reply_query(query_id):
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'trainer':
+        return jsonify({'message': 'Unauthorized'}), 401
+
+    trainer = Trainer.query.filter_by(email=user.email).first()
+    if not trainer:
+        return jsonify({'message': 'Trainer not found'}), 404
+
+    q = Query.query.get_or_404(query_id)
+
+    # Ensure this query belongs to trainer’s batch
+    batch_ids = [b.id for b in trainer.batches]
+    if q.batch_id not in batch_ids:
+        return jsonify({'message': 'Forbidden'}), 403
+
+    data = request.get_json()
+    reply_text = data.get('reply', '').strip()
+    if not reply_text:
+        return jsonify({'message': 'Reply cannot be empty'}), 400
+
+    q.reply = reply_text
+    q.status = 'Resolved'
+    db.session.commit()
+    return jsonify({'message': 'Reply sent successfully!'}), 200
+
+
+# 🧩 Student deletes their query
+@app.route('/student/delete_query/<int:query_id>', methods=['DELETE'])
+def delete_query(query_id):
+    user = inject_helpers()['current_user']()
+    if not user or user.role != 'student':
+        return jsonify({'status': 'error', 'message': 'Unauthorized'}), 403
+
+    q = Query.query.get_or_404(query_id)
+
+    # Student can only delete their own query
+    if q.user_id != user.id:
+        return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+
+    try:
+        db.session.delete(q)
+        db.session.commit()
+        return jsonify({'status': 'success', 'message': 'Query deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"Error deleting query: {e}")
+        return jsonify({'status': 'error', 'message': 'Database error'}), 500
+
+
+
+@app.route('/ask_ai', methods=['POST'])
+def ask_ai():
+    data = request.get_json()
+    query = data.get('query')
+    course = data.get('course', 'this course')
+
+    if not query:
+        return jsonify({'answer': "Please enter a valid question."}), 400
+
+    # Example using Ollama local model (e.g., Mistral)
+    try:
+        response = ollama.chat(model='mistral', messages=[
+            {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
+            {'role': 'user', 'content': query}
+        ])
+        answer = response['message']['content']
+        return jsonify({'answer': answer})
+    except Exception as e:
+        print("AI Error:", e)
+        return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
+
 
 # ---------------- Initialize ----------------
 # This function must run to create tables when Gunicorn loads the app
@@ -1028,11 +1323,10 @@ if __name__ == '__main__':
     
     # When running locally via 'python lms.py', tables are already created above.
     app.run(debug=True)
-    # with app.app_context():
-    #     print("⚙️ Rebuilding database schema on Aiven...")
-    #     db.drop_all()     # ⚠️ deletes all existing tables
-    #     db.create_all()   # recreates from your SQLAlchemy models
-    #     print("✅ Database tables recreated successfully! All model fields now synced.")
-
+    with app.app_context():
+        print("⚙️ Rebuilding database schema on Aiven...")
+        db.drop_all()     # ⚠️ deletes all existing tables
+        db.create_all()   # recreates from your SQLAlchemy models
+        print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------

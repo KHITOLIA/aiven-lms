@@ -1,7 +1,6 @@
 {% extends 'layout.html' %}
 {% block content %}
 <style>
-    /* Stats Cards Section */
     .stats-card {
         background: #22223b;
         border-radius: 15px;
@@ -10,97 +9,82 @@
         text-align: center;
         border: 2px solid transparent;
         transition: transform 0.4s ease, border-color 0.4s ease;
-        position: relative;
-        overflow: hidden;
     }
 
     .stats-card:hover {
-        transform: translateY(-8px) scale(1.02) rotateX(5deg);
+        transform: translateY(-8px) scale(1.02);
         border-color: var(--highlight-color);
     }
 
     .stats-card h4 {
-        color: var(--accent-color); /* Yellow for numbers */
+        color: var(--accent-color);
         font-size: 2.5rem;
         margin-bottom: 0.5rem;
         text-shadow: 0 0 5px rgba(241, 196, 15, 0.5);
     }
-    .stats-card p {
-        color: var(--text-color);
-        margin: 0;
-        font-weight: 500;
-        letter-spacing: 1px;
-    }
-    
-    /* --- BATCH LIST BUTTONS (Vertical Layout) --- */
+
     .batch-actions {
-        /* Use flex column to stack buttons vertically */
         display: flex;
         flex-direction: column;
-        gap: 5px; /* Small space between buttons */
-        min-width: 120px; /* Ensures buttons have consistent width */
+        gap: 5px;
+        min-width: 120px;
     }
-    
-    /* List item spacing and contrast fix */
-    
-    /* CRITICAL FIX: Ensure the entire list container is transparent */
+
     .list-group {
-        background: transparent !important; 
+        background: transparent !important;
     }
 
     .list-group-item {
-        /* CRITICAL FIX: Ensure background is transparent by overriding Bootstrap/Layout defaults */
-        background-color: transparent !important; 
-        color: var(--primary-text-bright) !important; /* Ensure main list text is bright */
-        padding: 1.2rem 1rem !important; 
+        background-color: transparent !important;
+        color: var(--primary-text-bright) !important;
+        padding: 1.2rem 1rem !important;
         border-bottom: 1px solid #34495e !important;
-        transition: background-color 0.3s ease, transform 0.2s ease;
     }
 
     .list-group-item:hover {
-        /* Keep subtle glow hover effect */
         background-color: rgba(138, 43, 226, 0.1) !important;
     }
 
-    .list-group-item strong {
-        color: var(--primary-text-bright);
-        font-weight: 600;
-        display: block; 
-        font-size: 1.05rem;
-    }
-
-    .list-group-item .small-muted {
-        color: var(--secondary-text-clear); 
+    .small-muted {
+        color: var(--secondary-text-clear);
         font-size: 0.85rem;
-        font-weight: 400;
     }
-
-    /* Override btn-sm padding for better vertical stacking look */
-    .batch-actions .btn {
-        padding: 0.5rem 0.5rem;
-        font-size: 0.85rem;
-        text-align: center;
-    }
-
 </style>
 
 <h3 class="mb-5" id="management-hub">Management Panel (CRUD Forms)</h3>
 
 <div class="row g-4">
     <div class="col-lg-6">
+        <!-- CREATE BATCH / COURSE -->
         <div class="card p-4 shadow-sm mb-4">
-            <h5 class="card-title"><i class="fas fa-plus-square"></i> Create Batch</h5>
+            <h5 class="card-title"><i class="fas fa-plus-square"></i> Create Batch / Course</h5>
             <form method="post" action="{{ url_for('create_batch') }}">
                 <div class="mb-3">
-                    <input class="form-control" name="name" placeholder="Batch name" required>
+                    <input class="form-control" name="name" placeholder="Batch or Course Name" required>
                 </div>
                 <div class="mb-3">
                     <textarea class="form-control" name="description" placeholder="Description" rows="3"></textarea>
                 </div>
+
+                <!-- ✅ Added New Course Info Fields -->
+                <div class="mb-3">
+                    <input class="form-control" name="category" placeholder="Category (e.g., Data Science, Web Dev)">
+                </div>
+                <div class="mb-3">
+                    <input class="form-control" name="duration" placeholder="Duration (e.g., 6 weeks)">
+                <!-- </div>
+                <div class="mb-3">
+                    <input class="form-control" name="thumbnail" placeholder="Thumbnail Image URL">
+                </div> -->
+                <div class="mb-3">
+                    <textarea class="form-control" name="what_you_learn" placeholder="What students will learn..." rows="3"></textarea>
+                </div>
+
                 <button class="btn btn-primary w-100">Create New Batch</button>
             </form>
         </div>
 
+        <!-- ADD TRAINER -->
         <div class="card p-4 shadow-sm mb-4">
             <h5 class="card-title"><i class="fas fa-chalkboard-teacher"></i> Add Trainer</h5>
             <form method="post" action="{{ url_for('create_trainer') }}">
@@ -117,6 +101,7 @@
             </form>
         </div>
 
+        <!-- ASSIGN TRAINER -->
         <div class="card p-4 shadow-sm mb-4">
             <h5 class="card-title"><i class="fas fa-user-tie"></i> Assign Trainer to Batch</h5>
             <form method="post" action="{{ url_for('assign_trainer') }}">
@@ -140,6 +125,7 @@
             </form>
         </div>
 
+        <!-- ENROLL STUDENT -->
         <div class="card p-4 shadow-sm mb-4">
             <h5 class="card-title"><i class="fas fa-user-plus"></i> Enroll Student</h5>
             <form method="post" action="{{ url_for('enroll_student') }}">
@@ -163,6 +149,7 @@
             </form>
         </div>
 
+        <!-- SEARCH STUDENT -->
         <div class="card p-4 shadow-sm mb-4">
             <h5 class="card-title"><i class="fas fa-search"></i> Search Student</h5>
             <form method="get" action="{{ url_for('search_student_batches') }}">
@@ -173,6 +160,7 @@
             </form>
         </div>
 
+        <!-- SEARCH TRAINER -->
         <div class="card p-4 shadow-sm">
             <h5 class="card-title"><i class="fas fa-search"></i> Search Trainer</h5>
             <form method="get" action="{{ url_for('search_trainer') }}">
@@ -182,21 +170,22 @@
                 </div>
             </form>
         </div>
-
     </div>
 
+    <!-- RIGHT COLUMN -->
     <div class="col-lg-6">
         <div class="card p-4 shadow-sm">
-            <h5 class="card-title"><i class="fas fa-book-open"></i> All Batches</h5>
+            <h5 class="card-title"><i class="fas fa-book-open"></i> All Batches / Courses</h5>
             <ul class="list-group list-group-flush mt-3">
                 {% for b in batches %}
                 <li class="list-group-item d-flex justify-content-between align-items-center">
                     <div style="flex-grow: 1; padding-right: 15px;">
-                        <strong>{{ b.name }}</strong><br>
-                        <small class="small-muted">Trainer: {{ b.trainer.name if b.trainer else 'Unassigned' }}</small>
+                        <strong>{{ b.name }}</strong>
+                        <small class="small-muted d-block">Category: {{ b.category or 'N/A' }}</small>
+                        <small class="small-muted d-block">Duration: {{ b.duration or 'N/A' }}</small>
+                        <small class="small-muted d-block">Trainer: {{ b.trainer.name if b.trainer else 'Unassigned' }}</small>
                         <small class="small-muted d-block">{{ b.description or 'No description provided.' }}</small>
                     </div>
-                    
                     <div class="batch-actions">
                         <a class="btn btn-sm btn-outline-warning" href="{{ url_for('edit_batch', batch_id=b.id) }}">Edit</a>
                         <a class="btn btn-sm btn-outline-info" href="{{ url_for('view_batch_enrollments', batch_id=b.id) }}">Enrollments</a>
@@ -209,7 +198,6 @@
                 {% endfor %}
             </ul>
         </div>
-
     </div>
 </div>
 {% endblock %}
