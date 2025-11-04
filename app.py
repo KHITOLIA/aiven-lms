@@ -31,12 +31,6 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('LMS_SECRET_KEY', 'dev-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
 
-# ----------------- DATABASE CONFIG (Aiven PostgreSQL) -----------------
-DB_USER = "avnadmin"
-DB_PASSWORD = "AVNS_DCgm-4auSh0kErY1GdT"
-DB_HOST = "pg-32cb6f92-chitkarauniversity390-8745.f.aivencloud.com"
-DB_PORT = "16785"
-DB_NAME = "defaultdb"
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -1039,5 +1033,6 @@ if __name__ == '__main__':
     #     db.drop_all()     # ⚠️ deletes all existing tables
     #     db.create_all()   # recreates from your SQLAlchemy models
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
+
 
 # ----------------------------------------------
