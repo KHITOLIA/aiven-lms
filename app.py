@@ -9,8 +9,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message 
 from dotenv import load_dotenv 
 import mimetypes
-from flask import jsonify, request
-import ollama  # or openai, depending on what you’re using
+
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -1267,31 +1266,6 @@ def delete_query(query_id):
         db.session.rollback()
         print(f"Error deleting query: {e}")
         return jsonify({'status': 'error', 'message': 'Database error'}), 500
-
-
-
-@app.route('/ask_ai', methods=['POST'])
-def ask_ai():
-    data = request.get_json()
-    query = data.get('query')
-    course = data.get('course', 'this course')
-
-    if not query:
-        return jsonify({'answer': "Please enter a valid question."}), 400
-
-    # Example using Ollama local model (e.g., Mistral)
-    try:
-        response = ollama.chat(model='mistral', messages=[
-            {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
-            {'role': 'user', 'content': query}
-        ])
-        answer = response['message']['content']
-        return jsonify({'answer': answer})
-    except Exception as e:
-        print("AI Error:", e)
-        return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
-
-
 # ---------------- Initialize ----------------
 # This function must run to create tables when Gunicorn loads the app
 def initialize_database(app):
@@ -1328,5 +1302,6 @@ if __name__ == '__main__':
         db.drop_all()     # ⚠️ deletes all existing tables
         db.create_all()   # recreates from your SQLAlchemy models
         print("✅ Database tables recreated successfully! All model fields now synced.")
+
 
 # ----------------------------------------------
