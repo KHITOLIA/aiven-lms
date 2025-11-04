@@ -1,6 +1,7 @@
 Flask
+SQLAlchemy
 Flask-SQLAlchemy
-Werkzeug
+psycopg2-binary
 Flask-Mail
 python-dotenv
-gunicorn  # Production WSGI server
+gunicorn
