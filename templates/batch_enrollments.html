@@ -1,0 +1,73 @@
+{% extends 'layout.html' %}
+{% block content %}
+<style>
+  /* NOTE: This CSS block is necessary for table contrast */
+  h3{
+    color:white;
+  }
+  p.small-muted{
+    color: white;
+  }
+  p{
+    color: white;
+  }
+
+  /* Ensure table text remains visible (overriding Bootstrap) */
+  .table {
+    --bs-table-color: var(--primary-text-bright);
+    --bs-table-bg: transparent;
+    --bs-table-striped-color: var(--primary-text-bright);
+    --bs-table-striped-bg: rgba(255, 255, 255, 0.05); 
+  }
+</style>
+<h3 class="mb-2">Enrollments for Batch: {{ batch.name }}</h3>
+<p class="small-muted">Current Trainer: 
+    <strong>{{ batch.trainer.name if batch.trainer else 'Unassigned' }}</strong> 
+    
+    {% if is_admin() %}
+    <a href="{{ url_for('change_batch_trainer', batch_id=batch.id) }}" class="btn btn-sm btn-outline-warning ms-3">
+        <i class="fas fa-exchange-alt"></i> Change Trainer
+    </a>
+    {% endif %}
+</p>
+<hr>
+{% if enrollments %}
+<div class="table-responsive">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Student Name</th>
+        <th>Email</th>
+        <th>Progress (Completed / Total)</th>
+        <th>Enrolled On</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in enrollments %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        <td>{{ e.user.name }}</td>
+        <td>{{ e.user.email }}</td>
+        
+        <td><span class="badge bg-info">{{ e.progress }}</span></td>
+        
+        <td>{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>
+          <a class="btn btn-sm btn-outline-danger"
+             href="{{ url_for('delete_enrollment', enroll_id=e.id) }}"
+             onclick="return confirm('Are you sure you want to remove this student from the batch?')">
+             Remove
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>No students enrolled in this batch yet.</p>
+{% endif %}
+<a class="btn btn-secondary mt-3" href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+{% endblock %}

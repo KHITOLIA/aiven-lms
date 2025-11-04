@@ -1,0 +1,115 @@
+{% extends 'layout.html' %}
+{% block content %}
+<h3 class="mb-4">Batch: {{ batch.name }}</h3>
+<p class="small-muted">{{ batch.description }}</p>
+<hr>
+
+{% if can_upload_delete %}
+<div class="card p-3 mb-3">
+  <h5>Upload Content (Videos/Cheatsheets/PDFs)</h5>
+  <form method="post" action="{{ url_for('upload', batch_id=batch.id) }}" enctype="multipart/form-data">
+    <div class="mb-2"><input type="file" name="file" class="form-control" required></div>
+    <div class="mb-2"><input class="form-control" name="notes" placeholder="Notes (optional, e.g., 'Class 5 Recording', 'Python Cheatsheet')"></div>
+    <button class="btn btn-success">Upload</button>
+  </form>
+</div>
+{% else %}
+   <div class="alert alert-info text-center" role="alert">
+       <i class="fas fa-info-circle"></i> Content upload is restricted to the assigned trainer only.
+   </div>
+{% endif %}
+
+<h5>Recordings and Resources ({{ recordings|length }})</h5>
+<div class="card p-3">
+  {% if recordings %}
+    <div class="table-responsive">
+      <table class="table table-striped">
+        <thead><tr><th>#</th><th>Name</th><th>Uploaded</th><th>Notes</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for r in recordings %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ r.original_name }}
+              {% if not is_admin() and not is_trainer() %}
+                {% if progress_data.get(r.id) %}
+                  <span class="badge bg-success">Completed</span>
+                {% else %}
+                  {% endif %}
+              {% endif %}
+            </td>
+            <td>{{ r.upload_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ r.notes or '' }}</td>
+            <td>
+              <div class="action-buttons-wrapper">
+                  <a class="btn btn-sm btn-outline-primary" 
+                     href="{{ url_for('serve_content', batch_id=batch.id, filename=r.filename) }}"
+                     target="_blank">
+                     <i class="fas fa-eye"></i> View
+                  </a>
+                  
+                  {% if not is_admin() and not is_trainer() and not progress_data.get(r.id) %}
+                      <button class="btn btn-sm btn-success mark-complete-btn" 
+                              data-recording-id="{{ r.id }}">
+                              <i class="fas fa-check-circle"></i> Mark Complete
+                      </button>
+                  {% endif %}
+
+                  {% if can_upload_delete %}
+                    <a class="btn btn-sm btn-outline-danger" href="{{ url_for('delete_recording', rec_id=r.id) }}" onclick="return confirm('Delete recording?')">Delete</a>
+                  {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p>No recordings yet.</p>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% if current_user() and current_user().role == 'student' %}
+  <script>
+    document.querySelectorAll('.mark-complete-btn').forEach(button => {
+      button.addEventListener('click', (event) => {
+        const button = event.currentTarget;
+        const recordingId = button.getAttribute('data-recording-id');
+        
+        // Disable button immediately for visual feedback
+        button.disabled = true;
+        button.textContent = 'Updating...';
+
+        // 1. Send API call to update progress
+        fetch('{{ url_for("update_progress") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ recording_id: recordingId }),
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                // 2. SUCCESS: Reload page to show 'Completed' badge and update dashboard
+                alert('Content marked as complete! Page will reload.');
+                window.location.reload(); 
+            } else {
+                 // 3. FAILURE: Show error and re-enable button
+                 alert('Error: Failed to mark complete. Please try again.');
+                 button.disabled = false;
+                 button.textContent = 'Mark Complete';
+            }
+        })
+        .catch(error => {
+             // 4. CRITICAL FAILURE: Server communication error
+             console.error('Error updating progress:', error);
+             alert('Connection Error: Could not reach the server to update progress.');
+             button.disabled = false;
+             button.textContent = 'Mark Complete';
+        });
+      });
+    });
+  </script>
+{% endif %}
