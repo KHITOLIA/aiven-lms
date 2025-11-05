@@ -51,9 +51,30 @@
 .enroll-btn:hover {
     background-color: #ff8533;
 }
+/* Add this inside your existing <style> block */
+.home-btn {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background-color: #ffffff;
+    color: #1e3c72;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.3s;
+}
+.home-btn:hover {
+    background-color: #f0f0f0;
+}
+.hero-section {
+    position: relative; /* needed for absolute positioning of the button */
+}
+
 </style>
 
 <div class="hero-section">
+    <a href="{{ url_for('index') }}" class="home-btn">Home</a> <!-- Home button in top-left -->
     <h1>{{ batch.name }}</h1>
     <p class="lead">{{ batch.description or "Learn and grow with this course." }}</p>
     <a href="{{ url_for('register') }}" class="enroll-btn">Enroll Now</a>
@@ -87,6 +108,7 @@
             </ul>
         </div> -->
     </div>
+    
 
     <div class="col-md-4">
         <div class="trainer-card">
@@ -105,4 +127,3 @@
     </div>
 </div>
 {% endblock %}
-
