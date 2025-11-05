@@ -82,7 +82,7 @@
     <div class="col-md-8">
         <div class="course-desc">
             <h4>About this Course</h4>
-            <p>{{ batch.description or "This course will help you understand the core concepts step-by-step." }}</p>
+            <p>{{"This course will help you understand the core concepts of batch.name" }}</p>
             <hr>
 
             {% if batch.category %}
@@ -141,3 +141,4 @@
     </div>
 </div>
 {% endblock %}
+
