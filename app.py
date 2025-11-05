@@ -9,7 +9,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message 
 from dotenv import load_dotenv 
 import mimetypes
-
+from flask import jsonify, request
+import ollama  # or openai, depending on what you’re using
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -141,7 +142,10 @@ class Query(db.Model):
     user = db.relationship('User', backref='queries', lazy=True)
     batch = db.relationship('Batch', backref='queries', lazy=True)
     
-
+class Student(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
 
 
 class OTP_Token(db.Model): # OTP MODEL RETAINED FOR PASSWORD RESET
@@ -785,13 +789,50 @@ def view_batch_enrollments(batch_id):
     
     return render_template('batch_enrollments.html', batch=batch, enrollments=enrollments)
 
-@app.route('/student/<int:user_id>/batches')
-def view_student_batches(user_id):
-    if not inject_helpers()['is_admin']():
-        abort(403)
-    student = User.query.get_or_404(user_id)
-    enrollments = Enrollment.query.filter_by(user_id=student.id).join(Batch).all()
-    return render_template('student_batches.html', student=student, enrollments=enrollments)
+@app.route('/student/<int:student_id>/batches')
+def student_batches(student_id):
+    student = Student.query.get_or_404(student_id)
+    enrollments = Enrollment.query.filter_by(student_id=student.id).all()
+    all_batches = Batch.query.all()
+    enrolled_batch_ids = [e.batch.id for e in enrollments]
+    return render_template(
+        'student_batches.html',
+        student=student,
+        enrollments=enrollments,
+        all_batches=all_batches,
+        enrolled_batch_ids=enrolled_batch_ids
+    )
+
+
+@app.route('/student/<int:student_id>/add_batch', methods=['POST'])
+def add_student_to_batch(student_id):
+    student = Student.query.get_or_404(student_id)  # fetch the student
+    batch_id = request.form.get('batch_id')  # get selected batch from form
+    if not batch_id:
+        flash('Please select a batch.', 'warning')
+        return redirect(url_for('student_batches', student_id=student.id))
+
+    batch = Batch.query.get(batch_id)
+    if not batch:
+        flash('Selected batch not found.', 'danger')
+        return redirect(url_for('student_batches', student_id=student.id))
+
+    # Check if already enrolled
+    existing = Enrollment.query.filter_by(student_id=student.id, batch_id=batch.id).first()
+    if existing:
+        flash('Student is already enrolled in this batch.', 'info')
+        return redirect(url_for('student_batches', student_id=student.id))
+
+    # Add enrollment
+    enrollment = Enrollment(student_id=student.id, batch_id=batch.id)
+    db.session.add(enrollment)
+    db.session.commit()
+    flash(f'{student.name} has been added to batch {batch.name}.', 'success')
+    return redirect(url_for('student_batches', student_id=student.id))
+
+
+
+
 
 @app.route('/search_student_batches')
 def search_student_batches():
@@ -840,48 +881,17 @@ def delete_enrollment(enroll_id):
     flash(f"Student {enrollment.user.name} removed from batch {enrollment.batch.name}", "success")
     return redirect(url_for('admin_dashboard'))
 
-# Route to handle general profile update (name, phone, about, etc.)
-def handle_profile_update(user, trainer=None):
-    if 'profile_pic' in request.files:
-        file = request.files['profile_pic']
-        if file.filename != '' and file and allowed_file(file.filename):
-            prefix = 'trainer' if trainer else user.role
-            id_val = trainer.id if trainer else user.id
-            filename = secure_filename(f"{prefix}_{id_val}_{file.filename}")
-            PROFILE_PICS_DIR.mkdir(parents=True, exist_ok=True)
-            file.save(os.path.join(PROFILE_PICS_DIR, filename))
-            
-            # Update both user and trainer profiles if applicable
-            user.profile_pic = filename
-            if trainer:
-                trainer.profile_pic = filename
 
-    user.name = request.form['name']
-    user.phone = request.form.get('phone')
-    user.address = request.form.get('address')
-    user.about = request.form.get('about')
-    
-    if trainer:
-        trainer.name = request.form['name']
-        trainer.phone = request.form.get('phone')
-        trainer.address = request.form.get('address')
-        trainer.about = request.form.get('about')
-        # Trainer specific field
-        trainer.expertise = request.form.get('expertise')
-        
-    db.session.commit()
-    flash('Profile updated successfully!', 'success')
-
-# Route to handle email and password changes (Security)
 @app.route('/profile/security', methods=['POST'])
 def update_security():
     user = inject_helpers()['current_user']()
-    if not user: abort(403)
-    
+    if not user:
+        abort(403)
+
     current_password = request.form['current_password']
     new_password = request.form.get('new_password')
     new_email = request.form.get('new_email')
-    
+
     # 1. Password Verification
     if not user.check_password(current_password):
         flash('Incorrect current password.', 'danger')
@@ -894,27 +904,64 @@ def update_security():
             return redirect(url_for('profile'))
         user.set_password(new_password)
         flash('Password updated successfully.', 'success')
-        
+
     # 3. Handle Email Change
     if new_email and new_email != user.email:
-        # Check if email is already in use by another user
         if User.query.filter(User.email == new_email, User.id != user.id).first():
-            flash('Email address is already in use by another account.', 'danger')
+            flash('Email address already in use.', 'danger')
             return redirect(url_for('profile'))
-        
-        # Update User email
+
         user.email = new_email
-        
-        # If Trainer, update Trainer email as well
+
+        # Update trainer email if applicable
         if user.role == 'trainer':
             trainer = Trainer.query.filter_by(email=user.email).first()
             if trainer:
                 trainer.email = new_email
-        
+
         flash('Email updated successfully.', 'success')
 
     db.session.commit()
     return redirect(url_for('profile'))
+
+
+def handle_profile_update(user, trainer=None):
+    # 1. Handle profile picture upload
+    if 'profile_pic' in request.files:
+        file = request.files['profile_pic']
+        if file.filename != '' and file and allowed_file(file.filename):
+            prefix = 'trainer' if trainer else user.role
+            id_val = trainer.id if trainer else user.id
+            filename = secure_filename(f"{prefix}_{id_val}_{file.filename}")
+
+            # Delete old file if exists
+            old_file = PROFILE_PICS_DIR / (trainer.profile_pic if trainer else user.profile_pic)
+            if old_file.exists():
+                old_file.unlink()
+
+            # Save new file
+            file.save(PROFILE_PICS_DIR / filename)
+
+            # Update DB
+            user.profile_pic = filename
+            if trainer:
+                trainer.profile_pic = filename
+
+    # 2. Update general fields
+    user.name = request.form['name']
+    user.phone = request.form.get('phone')
+    user.address = request.form.get('address')
+    user.about = request.form.get('about')
+
+    if trainer:
+        trainer.name = request.form['name']
+        trainer.phone = request.form.get('phone')
+        trainer.address = request.form.get('address')
+        trainer.about = request.form.get('about')
+        trainer.expertise = request.form.get('expertise')
+
+    db.session.commit()
+    flash('Profile updated successfully!', 'success')
 
 @app.route('/profile')
 def profile():
@@ -922,7 +969,7 @@ def profile():
     if not user:
         flash('Please log in to view your profile.', 'danger')
         return redirect(url_for('login'))
-    
+
     if user.role == 'admin':
         return redirect(url_for('admin_profile'))
     elif user.role == 'trainer':
@@ -932,7 +979,8 @@ def profile():
 
 @app.route('/admin/profile', methods=['GET', 'POST'])
 def admin_profile():
-    if not inject_helpers()['is_admin'](): abort(403)
+    if not inject_helpers()['is_admin']():
+        abort(403)
     user = inject_helpers()['current_user']()
     if request.method == 'POST':
         handle_profile_update(user)
@@ -942,7 +990,8 @@ def admin_profile():
 @app.route('/trainer/profile', methods=['GET', 'POST'])
 def trainer_profile():
     user = inject_helpers()['current_user']()
-    if not user or user.role != 'trainer': abort(403)
+    if not user or user.role != 'trainer':
+        abort(403)
     trainer = Trainer.query.filter_by(email=user.email).first_or_404()
     if request.method == 'POST':
         handle_profile_update(user, trainer=trainer)
@@ -952,7 +1001,8 @@ def trainer_profile():
 @app.route('/student/profile', methods=['GET', 'POST'])
 def student_profile():
     user = inject_helpers()['current_user']()
-    if not user or user.role != 'student': abort(403)
+    if not user or user.role != 'student':
+        abort(403)
     if request.method == 'POST':
         handle_profile_update(user)
         return redirect(url_for('student_profile'))
@@ -976,6 +1026,7 @@ def admin_change_password(user_id):
             return redirect(url_for('view_all_students'))
 
     return render_template('change_password.html', student=student)
+
 
 @app.route('/api/progress/update', methods=['POST'])
 def update_progress():
@@ -1266,6 +1317,48 @@ def delete_query(query_id):
         db.session.rollback()
         print(f"Error deleting query: {e}")
         return jsonify({'status': 'error', 'message': 'Database error'}), 500
+
+
+
+@app.route('/ask_ai', methods=['POST'])
+def ask_ai():
+    data = request.get_json()
+    query = data.get('query')
+    course = data.get('course', 'this course')
+
+    if not query:
+        return jsonify({'answer': "Please enter a valid question."}), 400
+
+    # Example using Ollama local model (e.g., Mistral)
+    try:
+        response = ollama.chat(model='mistral', messages=[
+            {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
+            {'role': 'user', 'content': query}
+        ])
+        answer = response['message']['content']
+        return jsonify({'answer': answer})
+    except Exception as e:
+        print("AI Error:", e)
+        return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
+
+# @app.route('/student/<int:student_id>/add_batch', methods=['POST'])
+# def add_student_to_batch(student_id):
+#     batch_id = request.form.get('batch_id')
+#     student = Student.query.get_or_404(student_id)
+#     batch = Batch.query.get_or_404(batch_id)
+
+#     # Check if already enrolled
+#     if not Enrollment.query.filter_by(student_id=student.id, batch_id=batch.id).first():
+#         enrollment = Enrollment(student_id=student.id, batch_id=batch.id)
+#         db.session.add(enrollment)
+#         db.session.commit()
+#         flash(f'{student.name} has been added to {batch.name}', 'success')
+#     else:
+#         flash(f'{student.name} is already enrolled in {batch.name}', 'warning')
+#     return redirect(url_for('view_student', student_id=student.id))
+
+
+
 # ---------------- Initialize ----------------
 # This function must run to create tables when Gunicorn loads the app
 def initialize_database(app):
@@ -1297,11 +1390,10 @@ if __name__ == '__main__':
     
     # When running locally via 'python lms.py', tables are already created above.
     app.run(debug=True)
-    with app.app_context():
-        print("⚙️ Rebuilding database schema on Aiven...")
-        db.drop_all()     # ⚠️ deletes all existing tables
-        db.create_all()   # recreates from your SQLAlchemy models
-        print("✅ Database tables recreated successfully! All model fields now synced.")
-
+    # with app.app_context():
+    #     print("⚙️ Rebuilding database schema on Aiven...")
+    #     db.drop_all()     # ⚠️ deletes all existing tables
+    #     db.create_all()   # recreates from your SQLAlchemy models
+    #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
