@@ -1437,10 +1437,9 @@ if __name__ == '__main__':
     pathlib.Path('static').mkdir(exist_ok=True)
     pathlib.Path('uploads').mkdir(exist_ok=True)
     pathlib.Path('static/profiles').mkdir(exist_ok=True)
-    
+    ensure_image_columns()
     # When running locally via 'python lms.py', tables are already created above.
     app.run(debug=True)
-    # ensure_image_columns()
     # with app.app_context():
     #     print("⚙️ Rebuilding database schema on Aiven...")
     # #     db.drop_all()     # ⚠️ deletes all existing tables
@@ -1448,3 +1447,4 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
+
