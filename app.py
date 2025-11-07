@@ -34,8 +34,8 @@ app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
 
 # # ----------------- DATABASE CONFIG (Aiven PostgreSQL) -----------------
 DB_USER = "avnadmin"
-DB_PASSWORD = "AVNS_DCgm-4auSh0kErY1GdT"
-DB_HOST = "pg-32cb6f92-chitkarauniversity390-8745.f.aivencloud.com"
+DB_PASSWORD = "AVNS_ZTtqHb59ltibtTAtRy1"
+DB_HOST = "mysql-2ed8aa9f-chitkarauniversity390-8745.i.aivencloud.com"
 DB_PORT = "16785"
 DB_NAME = "defaultdb"
 
@@ -1398,5 +1398,6 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
+
 
 
