@@ -2,6 +2,33 @@
 {% block content %}
 <h3 class="mb-4">Enrollments for {{ student.name }}</h3>
 <p>Email: {{ student.email }}</p>
+
+<!-- Add Student to Batch Form -->
+<div class="card p-4 mb-4">
+    <h5>Add Student to Batch</h5>
+    <form method="post" action="{{ url_for('add_student_to_batch', student_id=student.id) }}">
+        <div class="mb-3">
+            <label for="batch" class="form-label">Select Batch</label>
+            <select name="batch_id" id="batch" class="form-select" required>
+                <option value="" disabled selected>-- Choose a batch --</option>
+                {% for batch in all_batches %}
+                    {% set enrolled = False %}
+                    {% for e in enrollments %}
+                        {% if e.batch.id == batch.id %}
+                            {% set enrolled = True %}
+                        {% endif %}
+                    {% endfor %}
+                    <option value="{{ batch.id }}" {% if enrolled %}disabled{% endif %}>
+                        {{ batch.name }} ({{ batch.duration or "N/A" }}) {% if enrolled %}- Already Enrolled{% endif %}
+                    </option>
+                {% endfor %}
+            </select>
+        </div>
+        <button type="submit" class="btn btn-success">Add to Batch</button>
+    </form>
+</div>
+
+<!-- Current Enrollments Table -->
 <div class="card p-4">
     {% if enrollments %}
     <div class="table-responsive">

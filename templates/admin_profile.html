@@ -4,32 +4,39 @@
 
 <div class="card p-4 text-center mb-4">
     <h5 class="card-title">Personal Details</h5>
+
     {% if user.profile_pic %}
-        <img src="{{ url_for('static', filename='profiles/' + user.profile_pic) }}" class="profile-img mx-auto" alt="Profile Picture">
+        <img src="{{ url_for('static', filename='profiles/' + user.profile_pic) }}" class="profile-img mx-auto mb-3" alt="Profile Picture">
     {% else %}
-        <i class="fas fa-user-circle fa-5x text-secondary mx-auto mb-3"></i>
+        <img src="{{ url_for('static', filename='tb.jpeg') }}" class="profile-img mx-auto mb-3" alt="Default Profile Picture">
     {% endif %}
+
     <form method="post" enctype="multipart/form-data">
         <div class="mb-3">
-            <label class="form-label">Profile Picture</label>
-            <input type="file" class="form-control" name="profile_pic">
+            <label class="form-label">Upload Profile Picture</label>
+            <input type="file" class="form-control" name="profile_pic" accept="image/*">
         </div>
+
         <div class="mb-3">
             <label class="form-label">Name</label>
             <input type="text" class="form-control" name="name" value="{{ user.name }}" required>
         </div>
+
         <div class="mb-3">
             <label class="form-label">Phone</label>
             <input type="text" class="form-control" name="phone" value="{{ user.phone or '' }}">
         </div>
+
         <div class="mb-3">
             <label class="form-label">Address</label>
             <input type="text" class="form-control" name="address" value="{{ user.address or '' }}">
         </div>
+
         <div class="mb-3">
             <label class="form-label">About</label>
             <textarea class="form-control" name="about" rows="4">{{ user.about or '' }}</textarea>
         </div>
+
         <button type="submit" class="btn btn-success">Update Details</button>
     </form>
 </div>
@@ -58,5 +65,4 @@
         <button type="submit" class="btn btn-danger">Update Email & Password</button>
     </form>
 </div>
-
 {% endblock %}

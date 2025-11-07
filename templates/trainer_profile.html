@@ -2,17 +2,27 @@
 {% block content %}
 <h3 class="mb-4">Trainer Profile</h3>
 
+<!-- Trainer Personal Details & Profile Pic -->
 <div class="card p-4 text-center mb-4">
     <h5 class="card-title">Personal Details</h5>
     {% if trainer.profile_pic %}
-        <img src="{{ url_for('static', filename='profiles/' + trainer.profile_pic) }}" class="profile-img mx-auto" alt="Profile Picture">
+        <img src="{{ url_for('static', filename='profiles/' + trainer.profile_pic) }}"
+            class="profile-img mx-auto mb-3"
+            alt="Profile Picture"
+            style="width:150px; height:150px; object-fit:cover; border-radius:50%;"
+            onerror="this.onerror=null; this.src='{{ url_for('static', filename='profile/logo.jpeg') }}';">
     {% else %}
-        <i class="fas fa-user-circle fa-5x text-secondary mx-auto mb-3"></i>
+        <img src="{{ url_for('static', filename='profiles/default.png') }}"
+            class="profile-img mx-auto mb-3"
+            alt="Default Profile Picture"
+            style="width:150px; height:150px; object-fit:cover; border-radius:50%;">
     {% endif %}
+
+    <!-- Profile Update Form -->
     <form method="post" enctype="multipart/form-data">
         <div class="mb-3">
             <label class="form-label">Profile Picture</label>
-            <input type="file" class="form-control" name="profile_pic">
+            <input type="file" class="form-control" name="profile_pic" accept="image/*">
         </div>
         <div class="mb-3">
             <label class="form-label">Name</label>
@@ -38,6 +48,7 @@
     </form>
 </div>
 
+<!-- Security Settings -->
 <div class="card p-4">
     <h5 class="card-title">Security Settings</h5>
     <form method="post" action="{{ url_for('update_security') }}">
