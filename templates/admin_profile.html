@@ -5,10 +5,14 @@
 <div class="card p-4 text-center mb-4">
     <h5 class="card-title">Personal Details</h5>
 
-    {% if user.profile_pic %}
-        <img src="{{ url_for('static', filename='profiles/' + user.profile_pic) }}" class="profile-img mx-auto mb-3" alt="Profile Picture">
+    {% if user.profile_image %}
+        <img src="{{ url_for('get_profile_image', user_id=user.id) }}" 
+             class="rounded-circle mx-auto mb-3" 
+             alt="Profile Picture" width="150" height="150">
     {% else %}
-        <img src="{{ url_for('static', filename='tb.jpeg') }}" class="profile-img mx-auto mb-3" alt="Default Profile Picture">
+        <img src="{{ url_for('static', filename='default_profile.png') }}" 
+             class="rounded-circle mx-auto mb-3" 
+             alt="Default Profile" width="150" height="150">
     {% endif %}
 
     <form method="post" enctype="multipart/form-data">
