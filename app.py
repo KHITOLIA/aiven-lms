@@ -10,7 +10,7 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv 
 import mimetypes
 from flask import jsonify, request
-import ollama  # or openai, depending on what you’re using
+# import ollama  # or openai, depending on what you’re using
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -1400,3 +1400,4 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
+
