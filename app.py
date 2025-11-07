@@ -10,7 +10,7 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv 
 import mimetypes
 from flask import jsonify, request
-import ollama  # or openai, depending on what you’re using
+# import ollama  # or openai, depending on what you’re using
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -1323,26 +1323,26 @@ def delete_query(query_id):
 
 
 
-@app.route('/ask_ai', methods=['POST'])
-def ask_ai():
-    data = request.get_json()
-    query = data.get('query')
-    course = data.get('course', 'this course')
+# @app.route('/ask_ai', methods=['POST'])
+# def ask_ai():
+#     data = request.get_json()
+#     query = data.get('query')
+#     course = data.get('course', 'this course')
 
-    if not query:
-        return jsonify({'answer': "Please enter a valid question."}), 400
+#     if not query:
+#         return jsonify({'answer': "Please enter a valid question."}), 400
 
-    # Example using Ollama local model (e.g., Mistral)
-    try:
-        response = ollama.chat(model='mistral', messages=[
-            {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
-            {'role': 'user', 'content': query}
-        ])
-        answer = response['message']['content']
-        return jsonify({'answer': answer})
-    except Exception as e:
-        print("AI Error:", e)
-        return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
+#     # Example using Ollama local model (e.g., Mistral)
+#     try:
+#         response = ollama.chat(model='mistral', messages=[
+#             {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
+#             {'role': 'user', 'content': query}
+#         ])
+#         answer = response['message']['content']
+#         return jsonify({'answer': answer})
+#     except Exception as e:
+#         print("AI Error:", e)
+#         return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
 
 # @app.route('/student/<int:student_id>/add_batch', methods=['POST'])
 # def add_student_to_batch(student_id):
@@ -1400,3 +1400,4 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
+
