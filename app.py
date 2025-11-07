@@ -10,7 +10,7 @@ from flask_mail import Mail, Message
 from dotenv import load_dotenv 
 import mimetypes
 from flask import jsonify, request
-# import ollama  # or openai, depending on what you’re using
+import ollama  # or openai, depending on what you’re using
 # ----------------- Load Environment Variables -----------------
 load_dotenv()
 
@@ -32,13 +32,12 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('LMS_SECRET_KEY', 'dev-secret-key')
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024 * 1024  # 5 GB
 
-# # ----------------- DATABASE CONFIG (Aiven PostgreSQL) -----------------
+# ----------------- DATABASE CONFIG (Aiven PostgreSQL) -----------------
 DB_USER = "avnadmin"
 DB_PASSWORD = "AVNS_DCgm-4auSh0kErY1GdT"
 DB_HOST = "pg-32cb6f92-chitkarauniversity390-8745.f.aivencloud.com"
 DB_PORT = "16785"
 DB_NAME = "defaultdb"
-
 
 app.config["SQLALCHEMY_DATABASE_URI"] = f"postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}?sslmode=require"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
@@ -889,16 +888,16 @@ def update_security():
     if not user:
         abort(403)
 
-    current_password = request.form['current_password']
+    current_password = request.form.get('current_password', '')
     new_password = request.form.get('new_password')
     new_email = request.form.get('new_email')
 
-    # 1. Password Verification
+    # Password verification
     if not user.check_password(current_password):
         flash('Incorrect current password.', 'danger')
         return redirect(url_for('profile'))
 
-    # 2. Handle Password Change
+    # Update password
     if new_password:
         if len(new_password) < 6:
             flash('New password must be at least 6 characters long.', 'danger')
@@ -906,13 +905,11 @@ def update_security():
         user.set_password(new_password)
         flash('Password updated successfully.', 'success')
 
-    # 3. Handle Email Change
+    # Update email
     if new_email and new_email != user.email:
         if User.query.filter(User.email == new_email, User.id != user.id).first():
             flash('Email address already in use.', 'danger')
             return redirect(url_for('profile'))
-
-        user.email = new_email
 
         # Update trainer email if applicable
         if user.role == 'trainer':
@@ -920,14 +917,14 @@ def update_security():
             if trainer:
                 trainer.email = new_email
 
+        user.email = new_email
         flash('Email updated successfully.', 'success')
 
     db.session.commit()
     return redirect(url_for('profile'))
 
-
 def handle_profile_update(user, trainer=None):
-    # 1. Handle profile picture upload
+    # Profile pic upload
     if 'profile_pic' in request.files:
         file = request.files['profile_pic']
         if file.filename != '' and file and allowed_file(file.filename):
@@ -936,9 +933,11 @@ def handle_profile_update(user, trainer=None):
             filename = secure_filename(f"{prefix}_{id_val}_{file.filename}")
 
             # Delete old file if exists
-            old_file = PROFILE_PICS_DIR / (trainer.profile_pic if trainer else user.profile_pic)
-            if old_file.exists():
-                old_file.unlink()
+            old_filename = trainer.profile_pic if trainer else user.profile_pic
+            if old_filename:
+                old_file = PROFILE_PICS_DIR / old_filename
+                if old_file.exists():
+                    old_file.unlink()
 
             # Save new file
             file.save(PROFILE_PICS_DIR / filename)
@@ -948,7 +947,7 @@ def handle_profile_update(user, trainer=None):
             if trainer:
                 trainer.profile_pic = filename
 
-    # 2. Update general fields
+    # Update general fields
     user.name = request.form['name']
     user.phone = request.form.get('phone')
     user.address = request.form.get('address')
@@ -963,6 +962,9 @@ def handle_profile_update(user, trainer=None):
 
     db.session.commit()
     flash('Profile updated successfully!', 'success')
+
+
+
 
 @app.route('/profile')
 def profile():
@@ -1321,26 +1323,26 @@ def delete_query(query_id):
 
 
 
-# @app.route('/ask_ai', methods=['POST'])
-# def ask_ai():
-#     data = request.get_json()
-#     query = data.get('query')
-#     course = data.get('course', 'this course')
+@app.route('/ask_ai', methods=['POST'])
+def ask_ai():
+    data = request.get_json()
+    query = data.get('query')
+    course = data.get('course', 'this course')
 
-#     if not query:
-#         return jsonify({'answer': "Please enter a valid question."}), 400
+    if not query:
+        return jsonify({'answer': "Please enter a valid question."}), 400
 
-#     # Example using Ollama local model (e.g., Mistral)
-#     try:
-#         response = ollama.chat(model='mistral', messages=[
-#             {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
-#             {'role': 'user', 'content': query}
-#         ])
-#         answer = response['message']['content']
-#         return jsonify({'answer': answer})
-#     except Exception as e:
-#         print("AI Error:", e)
-#         return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
+    # Example using Ollama local model (e.g., Mistral)
+    try:
+        response = ollama.chat(model='mistral', messages=[
+            {'role': 'system', 'content': f'You are a helpful AI tutor for the course "{course}".'},
+            {'role': 'user', 'content': query}
+        ])
+        answer = response['message']['content']
+        return jsonify({'answer': answer})
+    except Exception as e:
+        print("AI Error:", e)
+        return jsonify({'answer': "Sorry, I couldn’t process that right now."}), 500
 
 # @app.route('/student/<int:student_id>/add_batch', methods=['POST'])
 # def add_student_to_batch(student_id):
@@ -1398,8 +1400,3 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
-
-
-
-
-
