@@ -53,6 +53,27 @@ app.config['MAIL_DEFAULT_SENDER'] = os.getenv('MAIL_USERNAME')
 mail = Mail(app)
 db = SQLAlchemy(app)
 
+from sqlalchemy import inspect, text
+
+def ensure_image_columns():
+    with app.app_context():
+        inspector = inspect(db.engine)
+        columns = [col['name'] for col in inspector.get_columns('user')]
+        added = []
+        if 'profile_pic_data' not in columns:
+            db.session.execute(text('ALTER TABLE "user" ADD COLUMN profile_pic_data BYTEA;'))
+            added.append('profile_pic_data')
+        if 'profile_pic_mime' not in columns:
+            db.session.execute(text('ALTER TABLE "user" ADD COLUMN profile_pic_mime VARCHAR(100);'))
+            added.append('profile_pic_mime')
+        if added:
+            db.session.commit()
+            print(f"✅ Added columns: {', '.join(added)}")
+        else:
+            print("ℹ️ Image columns already exist.")
+
+
+
 # ----------------- CONSTANTS -----------------
 ALLOWED_EXTENSIONS = {
     'mp4', 'mkv', 'webm', 'wav', 'mp3', 'ogg', 'png', 'jpg', 'jpeg',
@@ -61,6 +82,7 @@ ALLOWED_EXTENSIONS = {
 }
 
 # ---------------- Models ----------------
+
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -75,6 +97,10 @@ class User(db.Model):
     about = db.Column(db.Text, nullable=True)
     enrollments = db.relationship('Enrollment', backref='user', cascade='all, delete-orphan')
     progress = db.relationship('StudentProgress', backref='student', lazy=True)
+
+    # Add this new column for image storage
+    profile_pic_data = db.Column(db.LargeBinary, nullable=True)
+    profile_pic_mime = db.Column(db.String(50), nullable=True)  # store MIME type like 'image/png'
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -980,15 +1006,36 @@ def profile():
     else:
         return redirect(url_for('student_profile'))
 
+
+from flask import send_file
+import io
+
+@app.route('/profile_image/<int:user_id>')
+def get_profile_image(user_id):
+    user = User.query.get_or_404(user_id)
+    if user.profile_image:
+        return send_file(io.BytesIO(user.profile_image), mimetype='image/jpeg')
+    else:
+        return send_file('static/default_profile.png', mimetype='image/png')
+
 @app.route('/admin/profile', methods=['GET', 'POST'])
 def admin_profile():
-    if not inject_helpers()['is_admin']():
-        abort(403)
-    user = inject_helpers()['current_user']()
+    user = User.query.filter_by(id=session.get('user_id')).first()
+
     if request.method == 'POST':
-        handle_profile_update(user)
-        return redirect(url_for('admin_profile'))
+        if 'profile_pic' in request.files:
+            pic = request.files['profile_pic']
+            if pic and pic.filename != '':
+                user.profile_image = pic.read()
+
+        user.name = request.form.get('name')
+        user.phone = request.form.get('phone')
+        user.address = request.form.get('address')
+        user.about = request.form.get('about')
+        db.session.commit()
+
     return render_template('admin_profile.html', user=user)
+
 
 @app.route('/trainer/profile', methods=['GET', 'POST'])
 def trainer_profile():
@@ -1393,11 +1440,11 @@ if __name__ == '__main__':
     
     # When running locally via 'python lms.py', tables are already created above.
     app.run(debug=True)
+    # ensure_image_columns()
     # with app.app_context():
     #     print("⚙️ Rebuilding database schema on Aiven...")
-    #     db.drop_all()     # ⚠️ deletes all existing tables
+    # #     db.drop_all()     # ⚠️ deletes all existing tables
     #     db.create_all()   # recreates from your SQLAlchemy models
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
-
