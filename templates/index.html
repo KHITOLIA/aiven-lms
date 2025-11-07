@@ -158,7 +158,7 @@
                              <div class="trainer-name"><strong>{{ b.trainer.name if b.trainer else 'Unassigned' }}</strong></div>
                         </div>
                         {% if b.trainer and b.trainer.profile_pic %}
-                        <img src="{{ url_for('static', filename='profiles/' + b.trainer.profile_pic) }}" class="trainer-pic" alt="{{ b.trainer.name }}">
+                        <img src="{{ url_for('static', filename='images/tb.jpeg') }}" class="trainer-pic" alt="{{ b.trainer.name }}">
                         {% else %}
                         <i class="fas fa-user-circle fa-2x" style="color: var(--secondary-text-clear); margin-left: 10px;"></i>
                         {% endif %}
