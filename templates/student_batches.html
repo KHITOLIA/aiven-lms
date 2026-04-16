@@ -1,35 +1,44 @@
 {% extends 'layout.html' %}
 {% block content %}
+
 <h3 class="mb-4">Enrollments for {{ student.name }}</h3>
 <p>Email: {{ student.email }}</p>
 
-<!-- Add Student to Batch Form -->
+<!-- Add Student to Batch -->
 <div class="card p-4 mb-4">
     <h5>Add Student to Batch</h5>
-    <form method="post" action="{{ url_for('add_student_to_batch', student_id=student.id) }}">
+
+    <form method="post" action="{{ url_for('add_student_to_batch', user_id=student.id) }}">
+        
         <div class="mb-3">
-            <label for="batch" class="form-label">Select Batch</label>
+            <label class="form-label">Select Batch</label>
+
             <select name="batch_id" id="batch" class="form-select" required>
-                <option value="" disabled selected>-- Choose a batch --</option>
-                {% for batch in all_batches %}
-                    {% set enrolled = False %}
-                    {% for e in enrollments %}
-                        {% if e.batch.id == batch.id %}
-                            {% set enrolled = True %}
-                        {% endif %}
-                    {% endfor %}
-                    <option value="{{ batch.id }}" {% if enrolled %}disabled{% endif %}>
-                        {{ batch.name }} ({{ batch.duration or "N/A" }}) {% if enrolled %}- Already Enrolled{% endif %}
-                    </option>
-                {% endfor %}
-            </select>
+    <option value="" disabled selected>-- Choose a batch --</option>
+
+    {% for batch in all_batches %}
+        <option value="{{ batch.id }}"
+            {% if batch.id in enrolled_batch_ids %}disabled{% endif %}>
+            
+            {{ batch.name }} ({{ batch.duration or "N/A" }})
+
+            {% if batch.id in enrolled_batch_ids %}
+                - Already Enrolled
+            {% endif %}
+        </option>
+    {% endfor %}
+</select>
         </div>
-        <button type="submit" class="btn btn-success">Add to Batch</button>
+
+        <button type="submit" class="btn btn-success">
+            Add to Batch
+        </button>
     </form>
 </div>
 
-<!-- Current Enrollments Table -->
+<!-- Current Enrollments -->
 <div class="card p-4">
+
     {% if enrollments %}
     <div class="table-responsive">
         <table class="table table-striped table-hover">
@@ -42,6 +51,7 @@
                     <th>Actions</th>
                 </tr>
             </thead>
+
             <tbody>
                 {% for e in enrollments %}
                 <tr>
@@ -50,15 +60,25 @@
                     <td>{{ e.batch.description or '' }}</td>
                     <td>{{ e.enrolled_at.strftime('%Y-%m-%d %H:%M') }}</td>
                     <td>
-                        <a class="btn btn-sm btn-outline-danger" href="{{ url_for('delete_enrollment', enroll_id=e.id) }}" onclick="return confirm('Remove student from this batch?')">Remove</a>
+                        <a class="btn btn-sm btn-outline-danger"
+                           href="{{ url_for('delete_enrollment', enroll_id=e.id) }}"
+                           onclick="return confirm('Remove student from this batch?')">
+                           Remove
+                        </a>
                     </td>
                 </tr>
                 {% endfor %}
             </tbody>
+
         </table>
     </div>
+
     {% else %}
-    <p class="text-center text-muted">This student is not enrolled in any batches yet.</p>
+        <p class="text-center text-muted">
+            This student is not enrolled in any batches yet.
+        </p>
     {% endif %}
+
 </div>
+
 {% endblock %}
