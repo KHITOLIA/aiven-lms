@@ -815,57 +815,77 @@ def view_batch_enrollments(batch_id):
     
     return render_template('batch_enrollments.html', batch=batch, enrollments=enrollments)
 
-@app.route('/student/<int:student_id>/batches')
-def student_batches(student_id):
-    student = Student.query.get_or_404(student_id)
-    enrollments = Enrollment.query.filter_by(student_id=student.id).all()
+# ===============================
+# STUDENT BATCH VIEW PAGE
+# ===============================
+@app.route('/student/<int:user_id>/batches')
+def student_batches(user_id):
+    user = User.query.get_or_404(user_id)
+
+    enrollments = Enrollment.query.filter_by(user_id=user.id).all()
     all_batches = Batch.query.all()
-    enrolled_batch_ids = [e.batch.id for e in enrollments]
+
+    enrolled_batch_ids = [e.batch_id for e in enrollments]
+
     return render_template(
         'student_batches.html',
-        student=student,
+        student=user,
         enrollments=enrollments,
         all_batches=all_batches,
         enrolled_batch_ids=enrolled_batch_ids
     )
 
 
-@app.route('/student/<int:student_id>/add_batch', methods=['POST'])
-def add_student_to_batch(student_id):
-    student = Student.query.get_or_404(student_id)  # fetch the student
-    batch_id = request.form.get('batch_id')  # get selected batch from form
+# ===============================
+# ADD STUDENT TO BATCH
+# ===============================
+@app.route('/student/<int:user_id>/add_batch', methods=['POST'])
+def add_student_to_batch(user_id):
+    user = User.query.get_or_404(user_id)
+
+    if user.role != 'student':
+        flash("Invalid user.", "danger")
+        return redirect(url_for('dashboard'))
+
+    batch_id = request.form.get('batch_id')
+
     if not batch_id:
         flash('Please select a batch.', 'warning')
-        return redirect(url_for('student_batches', student_id=student.id))
+        return redirect(url_for('student_batches', user_id=user.id))
 
     batch = Batch.query.get(batch_id)
     if not batch:
-        flash('Selected batch not found.', 'danger')
-        return redirect(url_for('student_batches', student_id=student.id))
+        flash('Batch not found.', 'danger')
+        return redirect(url_for('student_batches', user_id=user.id))
 
-    # Check if already enrolled
-    existing = Enrollment.query.filter_by(student_id=student.id, batch_id=batch.id).first()
+    # Check already enrolled
+    existing = Enrollment.query.filter_by(user_id=user.id, batch_id=batch.id).first()
     if existing:
-        flash('Student is already enrolled in this batch.', 'info')
-        return redirect(url_for('student_batches', student_id=student.id))
+        flash('Student already enrolled in this batch.', 'info')
+        return redirect(url_for('student_batches', user_id=user.id))
 
     # Add enrollment
-    enrollment = Enrollment(student_id=student.id, batch_id=batch.id)
-    db.session.add(enrollment)
-    db.session.commit()
-    flash(f'{student.name} has been added to batch {batch.name}.', 'success')
-    return redirect(url_for('student_batches', student_id=student.id))
+    try:
+        enrollment = Enrollment(user_id=user.id, batch_id=batch.id)
+        db.session.add(enrollment)
+        db.session.commit()
+        flash(f'{user.name} added to {batch.name}', 'success')
+    except Exception as e:
+        db.session.rollback()
+        print("ERROR:", e)
+        flash('Database error occurred.', 'danger')
 
-
-
+    return redirect(url_for('student_batches', user_id=user.id))
 
 
 @app.route('/search_student_batches')
 def search_student_batches():
     if not inject_helpers()['is_admin']():
         abort(403)
+
     query = request.args.get('query', '').strip()
     student = None
+
     if '@' in query:
         student = User.query.filter_by(email=query).first()
     else:
@@ -873,11 +893,24 @@ def search_student_batches():
             enrollment = Enrollment.query.get(int(query))
             if enrollment:
                 student = enrollment.user
+
     if not student:
         flash('Student not found', 'danger')
         return redirect(url_for('admin_dashboard'))
-    enrollments = Enrollment.query.filter_by(user_id=student.id).join(Batch).all()
-    return render_template('student_batches.html', student=student, enrollments=enrollments)
+
+    enrollments = Enrollment.query.filter_by(user_id=student.id).all()
+
+    # ✅ ADD THESE 2 LINES (MAIN FIX)
+    all_batches = Batch.query.all()
+    enrolled_batch_ids = [e.batch_id for e in enrollments]
+
+    return render_template(
+        'student_batches.html',
+        student=student,
+        enrollments=enrollments,
+        all_batches=all_batches,              # ✅ IMPORTANT
+        enrolled_batch_ids=enrolled_batch_ids # ✅ IMPORTANT
+    )
 
 @app.route('/search_trainer')
 def search_trainer():
@@ -1437,9 +1470,10 @@ if __name__ == '__main__':
     pathlib.Path('static').mkdir(exist_ok=True)
     pathlib.Path('uploads').mkdir(exist_ok=True)
     pathlib.Path('static/profiles').mkdir(exist_ok=True)
-    ensure_image_columns()
+    
     # When running locally via 'python lms.py', tables are already created above.
     app.run(debug=True)
+    # ensure_image_columns()
     # with app.app_context():
     #     print("⚙️ Rebuilding database schema on Aiven...")
     # #     db.drop_all()     # ⚠️ deletes all existing tables
@@ -1447,4 +1481,3 @@ if __name__ == '__main__':
     #     print("✅ Database tables recreated successfully! All model fields now synced.")
 
 # ----------------------------------------------
-
